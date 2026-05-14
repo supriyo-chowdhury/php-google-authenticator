@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PHP 2FA — Interactive Demo</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --blue: #007bff;
+            --blue-dark: #0056b3;
+            --green: #28a745;
+            --red: #dc3545;
+            --bg: #f0f2f5;
+            --card: #fff;
+            --text: #1a1a2e;
+            --muted: #6c757d;
+            --border: #dee2e6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 2rem 1rem 4rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        header h1 { font-size: 2rem; letter-spacing: -.5px; }
+        header p  { color: var(--muted); margin-top: .4rem; }
+
+        .badge {
+            display: inline-block;
+            background: #e3f0ff;
+            color: var(--blue);
+            font-size: .75rem;
+            font-weight: 700;
+            padding: .2rem .55rem;
+            border-radius: 20px;
+            margin-left: .4rem;
+            vertical-align: middle;
+        }
+
+        /* Tabs */
+        .tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+        .tab {
+            padding: .55rem 1.25rem;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            background: var(--card);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: .9rem;
+            transition: all .15s;
+        }
+        .tab:hover             { border-color: var(--blue); color: var(--blue); }
+        .tab.active            { border-color: var(--blue); background: var(--blue); color: #fff; }
+
+        /* Panel / card */
+        .panel {
+            display: none;
+            width: 100%;
+            max-width: 440px;
+        }
+        .panel.active { display: block; }
+
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,.08);
+            padding: 2rem 2rem 2.5rem;
+            text-align: center;
+        }
+
+        h2 { font-size: 1.25rem; margin-bottom: .6rem; }
+        .hint { color: var(--muted); font-size: .875rem; line-height: 1.55; margin-bottom: 1.4rem; }
+
+        /* QR */
+        .qr-wrap { margin: 0 auto 1.2rem; }
+        .qr-wrap img {
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 6px;
+        }
+        .qr-placeholder {
+            width: 200px; height: 200px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1.2rem;
+            color: var(--muted);
+            font-size: .8rem;
+        }
+
+        /* Secret */
+        .secret-label { font-size: .8rem; color: var(--muted); margin-bottom: .3rem; }
+        .secret {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: .65rem 1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            word-break: break-all;
+            margin-bottom: 1.2rem;
+            cursor: copy;
+            position: relative;
+        }
+        .secret::after {
+            content: 'click to copy';
+            position: absolute;
+            right: .6rem; bottom: .3rem;
+            font-size: .65rem;
+            color: #bbb;
+            font-weight: 400;
+            letter-spacing: 0;
+        }
+
+        /* Form elements */
+        .field { display: flex; flex-direction: column; gap: .35rem; text-align: left; }
+        label  { font-size: .83rem; font-weight: 600; color: #444; }
+
+        input[type="text"], input[type="number"] {
+            padding: .75rem 1rem;
+            font-size: 1.5rem;
+            letter-spacing: 8px;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            outline: none;
+            transition: border-color .2s;
+            width: 100%;
+        }
+        input:focus { border-color: var(--blue); }
+
+        button.btn {
+            width: 100%;
+            padding: .85rem;
+            background: var(--blue);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: .5rem;
+            transition: background .2s, transform .1s;
+        }
+        button.btn:hover  { background: var(--blue-dark); }
+        button.btn:active { transform: scale(.98); }
+        button.btn.green  { background: var(--green); }
+        button.btn.green:hover { background: #1a843a; }
+
+        /* Alert */
+        .alert {
+            padding: .7rem 1rem;
+            border-radius: 8px;
+            font-size: .875rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .alert.show    { display: block; }
+        .alert.success { background: #e6f9ee; color: #1a7a46; border: 1px solid #b2dfcc; }
+        .alert.error   { background: #fde8e8; color: #c0392b; border: 1px solid #f5c6c6; }
+
+        /* TOTP timer ring */
+        .timer-row { display: flex; align-items: center; justify-content: center; gap: .75rem; margin: .6rem 0 1rem; }
+        .ring-wrap { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
+        .ring-wrap svg { transform: rotate(-90deg); }
+        circle.bg  { fill: none; stroke: #eee; stroke-width: 4; }
+        circle.fg  { fill: none; stroke: var(--blue); stroke-width: 4; stroke-linecap: round;
+                     transition: stroke-dashoffset .9s linear; }
+        .ring-num  {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .7rem; font-weight: 700; color: var(--text);
+        }
+        .timer-text { font-size: .82rem; color: var(--muted); }
+
+        /* Flow diagram */
+        .flow {
+            display: flex;
+            flex-direction: column;
+            gap: .5rem;
+            text-align: left;
+            margin-top: .5rem;
+        }
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: .75rem;
+            padding: .7rem .9rem;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border: 1px solid var(--border);
+        }
+        .step-icon {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--blue);
+            color: #fff;
+            font-size: .75rem;
+            font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .step-body strong { display: block; font-size: .85rem; margin-bottom: .15rem; }
+        .step-body span   { font-size: .78rem; color: var(--muted); }
+
+        footer { margin-top: 2.5rem; color: var(--muted); font-size: .8rem; text-align: center; }
+        a { color: var(--blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>PHP 2FA <span class="badge">Demo</span></h1>
+    <p>Google Authenticator / TOTP integration — interactive preview</p>
+</header>
+
+<div class="tabs">
+    <button class="tab active" onclick="showTab('setup')">🔧 Setup</button>
+    <button class="tab"        onclick="showTab('verify')">🔐 Verify</button>
+    <button class="tab"        onclick="showTab('flow')">📋 Flow</button>
+</div>
+
+<!-- ── Setup Panel ── -->
+<div class="panel active" id="tab-setup">
+<div class="card">
+    <h2>Set Up Two-Factor Auth</h2>
+    <p class="hint">
+        This demo generates a real TOTP secret. Scan the QR code in
+        Google Authenticator and then verify the code below.
+    </p>
+
+    <div class="qr-wrap" id="qrWrap">
+        <div class="qr-placeholder" id="qrPlaceholder">Generating…</div>
+    </div>
+
+    <div class="secret-label">Your secret key (manual entry)</div>
+    <div class="secret" id="secretDisplay" onclick="copySecret()" title="Click to copy">—</div>
+
+    <div class="alert" id="setupAlert"></div>
+
+    <div class="field">
+        <label for="setupOtp">Enter the 6-digit code from your app</label>
+        <input id="setupOtp" type="text" inputmode="numeric"
+               maxlength="6" placeholder="000000" autocomplete="one-time-code">
+    </div>
+    <button class="btn" onclick="verifySetupOtp()">Verify &amp; Enable 2FA</button>
+</div>
+</div>
+
+<!-- ── Verify Panel ── -->
+<div class="panel" id="tab-verify">
+<div class="card">
+    <h2>Login Verification</h2>
+    <p class="hint">
+        Enter the current 6-digit code from your authenticator app to
+        complete sign-in.
+    </p>
+
+    <div class="timer-row">
+        <div class="ring-wrap">
+            <svg viewBox="0 0 36 36" width="36" height="36">
+                <circle class="bg" cx="18" cy="18" r="15.9"/>
+                <circle class="fg" id="timerCircle" cx="18" cy="18" r="15.9"
+                        stroke-dasharray="100" stroke-dashoffset="0"/>
+            </svg>
+            <div class="ring-num" id="timerNum">30</div>
+        </div>
+        <span class="timer-text">seconds until the code refreshes</span>
+    </div>
+
+    <div class="alert" id="verifyAlert"></div>
+
+    <div class="field">
+        <label for="verifyOtp">Authentication code</label>
+        <input id="verifyOtp" type="text" inputmode="numeric"
+               maxlength="6" placeholder="000000" autocomplete="one-time-code" autofocus>
+    </div>
+    <button class="btn green" onclick="verifyLoginOtp()">Verify &amp; Log In</button>
+</div>
+</div>
+
+<!-- ── Flow Panel ── -->
+<div class="panel" id="tab-flow">
+<div class="card">
+    <h2>2FA Integration Flow</h2>
+    <p class="hint">How the five PHP files work together in your application.</p>
+
+    <div class="flow">
+        <div class="flow-step">
+            <div class="step-icon">1</div>
+            <div class="step-body">
+                <strong>setup_2fa.php</strong>
+                <span>Generates a secret, stores it in the session, renders the QR code and manual key.</span>
+            </div>
+        </div>
+        <div class="flow-step">
+            <div class="step-icon">2</div>
+            <div class="step-body">
+                <strong>enable_2fa_process.php</strong>
+                <span>Validates the OTP from the form, saves the secret to the DB, marks 2FA enabled.</span>
+            </div>
+        </div>
+        <div class="flow-step">
+            <div class="step-icon">3</div>
+            <div class="step-body">
+                <strong>verify_login_2fa.php</strong>
+                <span>Shows the OTP prompt during login (after password check passes).</span>
+            </div>
+        </div>
+        <div class="flow-step">
+            <div class="step-icon">4</div>
+            <div class="step-body">
+                <strong>verify_login_2fa_process.php</strong>
+                <span>Fetches the stored secret, verifies the OTP, rotates the session ID, redirects.</span>
+            </div>
+        </div>
+        <div class="flow-step">
+            <div class="step-icon">★</div>
+            <div class="step-body">
+                <strong>src/GoogleAuthenticator.php</strong>
+                <span>Core TOTP library — create secret, get code, verify code, generate QR URL.</span>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<footer>
+    <a href="https://github.com/supriyo-chowdhury/php-google-authenticator" target="_blank">GitHub Repository</a>
+    &nbsp;·&nbsp;
+    By <a href="https://github.com/supriyo-chowdhury" target="_blank">Supriyo Chowdhury</a>
+</footer>
+
+<script>
+// ── Tab navigation ──────────────────────────────────────────────────────────
+function showTab(name) {
+    document.querySelectorAll('.tab, .panel').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.querySelectorAll('.tab')[['setup','verify','flow'].indexOf(name)].classList.add('active');
+}
+
+// ── TOTP engine (pure JS, RFC 6238) ────────────────────────────────────────
+class TOTP {
+    static base32Decode(s) {
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        s = s.toUpperCase().replace(/=+$/, '');
+        let bits = 0, val = 0, out = [];
+        for (const c of s) {
+            val = (val << 5) | alphabet.indexOf(c);
+            bits += 5;
+            if (bits >= 8) { bits -= 8; out.push((val >>> bits) & 255); }
+        }
+        return new Uint8Array(out);
+    }
+
+    static async getCode(secret, timeSlice) {
+        const key   = this.base32Decode(secret);
+        const msg   = new ArrayBuffer(8);
+        new DataView(msg).setUint32(4, timeSlice, false);
+        const ck  = await crypto.subtle.importKey('raw', key, { name:'HMAC', hash:'SHA-1' }, false, ['sign']);
+        const sig = await crypto.subtle.sign('HMAC', ck, msg);
+        const h   = new Uint8Array(sig);
+        const off = h[19] & 0xf;
+        const num = ((h[off]&0x7f)<<24)|((h[off+1]&0xff)<<16)|((h[off+2]&0xff)<<8)|(h[off+3]&0xff);
+        return String(num % 1_000_000).padStart(6, '0');
+    }
+
+    static slice(ts) { return Math.floor((ts ?? Date.now() / 1000) / 30); }
+}
+
+// ── State ───────────────────────────────────────────────────────────────────
+let currentSecret = null;
+let setupVerified = false;
+
+// ── Generate secret (client-side Base32) ────────────────────────────────────
+function generateSecret(len = 32) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const bytes = crypto.getRandomValues(new Uint8Array(len));
+    return Array.from(bytes, b => chars[b & 31]).join('');
+}
+
+function buildQRUrl(secret, account = 'demo@example.com', issuer = 'MyApp') {
+    const uri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(uri)}&size=200x200&ecc=M`;
+}
+
+function initSetup() {
+    currentSecret = generateSecret();
+    document.getElementById('secretDisplay').textContent = currentSecret;
+
+    const wrap = document.getElementById('qrWrap');
+    const img  = new Image(200, 200);
+    img.alt    = 'QR code';
+    img.style.cssText = 'border:2px solid #dee2e6;border-radius:12px;padding:6px;';
+    img.src    = buildQRUrl(currentSecret);
+    img.onload = () => {
+        document.getElementById('qrPlaceholder')?.remove();
+        wrap.appendChild(img);
+    };
+}
+
+async function verifySetupOtp() {
+    const code = document.getElementById('setupOtp').value.trim();
+    showAlert('setupAlert', '', '');
+    if (!/^\d{6}$/.test(code)) { showAlert('setupAlert','error','Enter exactly 6 digits.'); return; }
+
+    // Check ±1 window
+    const slice = TOTP.slice();
+    for (let d = -1; d <= 1; d++) {
+        if (await TOTP.getCode(currentSecret, slice + d) === code) {
+            setupVerified = true;
+            showAlert('setupAlert','success','✓ 2FA verified and enabled! (demo)');
+            return;
+        }
+    }
+    showAlert('setupAlert','error','Invalid code. Check your app and try again.');
+}
+
+async function verifyLoginOtp() {
+    const code = document.getElementById('verifyOtp').value.trim();
+    showAlert('verifyAlert','','');
+    if (!setupVerified) { showAlert('verifyAlert','error','Please set up 2FA first (Setup tab).'); return; }
+    if (!/^\d{6}$/.test(code)) { showAlert('verifyAlert','error','Enter exactly 6 digits.'); return; }
+
+    const slice = TOTP.slice();
+    for (let d = -1; d <= 1; d++) {
+        if (await TOTP.getCode(currentSecret, slice + d) === code) {
+            showAlert('verifyAlert','success','✓ Login verified! Welcome back. (demo)');
+            return;
+        }
+    }
+    showAlert('verifyAlert','error','Invalid code. Try again.');
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function showAlert(id, type, text) {
+    const el = document.getElementById(id);
+    el.className = 'alert' + (type ? ` show ${type}` : '');
+    el.textContent = text;
+}
+
+function copySecret() {
+    navigator.clipboard?.writeText(currentSecret).then(() => {
+        const el = document.getElementById('secretDisplay');
+        el.style.background = '#d4edda';
+        setTimeout(() => el.style.background = '', 1200);
+    });
+}
+
+// ── TOTP countdown ring ─────────────────────────────────────────────────────
+function updateTimer() {
+    const sec     = 30 - (Math.floor(Date.now() / 1000) % 30);
+    const pct     = (sec / 30) * 100;
+    const circle  = document.getElementById('timerCircle');
+    const numEl   = document.getElementById('timerNum');
+    if (circle) circle.style.strokeDashoffset = 100 - pct;
+    if (numEl)  numEl.textContent = sec;
+    if (sec <= 5 && circle) circle.style.stroke = '#dc3545';
+    else if (circle) circle.style.stroke = 'var(--blue)';
+}
+
+setInterval(updateTimer, 1000);
+updateTimer();
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+initSetup();
+</script>
+</body>
+</html>

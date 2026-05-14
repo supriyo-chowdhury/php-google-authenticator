@@ -1,0 +1,13 @@
+# Never commit your real config
+config.php
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
